@@ -1,0 +1,13 @@
+
+Net package (https://golang.org/pkg/net/)
+    -the net Package net provides a portable interface for network I/O, including TCP/IP, UDP, 
+    domain name resolution, and Unix domain sockets.
+
+    -The Dial function connects to a server where the first parameter is the type of server (udp or tcp) and the second parameter is the server address
+    -The local server address is 127.0.0.1
+
+    -The listenudp function creates a udpserver
+
+    -the make function creates a "slice"
+    -Slices can be created with the built-in make function; this is how you create dynamically-sized arrays.
+    
