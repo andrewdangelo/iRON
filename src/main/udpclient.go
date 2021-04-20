@@ -2,7 +2,11 @@ package main
 
 import (
 	"bufio"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -43,6 +47,67 @@ func CallClear() {
 	}
 }
 
+func sendEncryptedMessage() {
+	text := []byte("Hi UDP Server, How are you doing?")
+	key := []byte("passphrasewhichneedstobe32bytes!") //needs to be 32 bytes
+
+	fmt.Println("Original text:")
+	fmt.Println(text)
+	// generate a new aes cipher using our 32 byte long key
+	c, err := aes.NewCipher(key)
+	// if there are any errors, handle them
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	// gcm or Galois/Counter Mode, is a mode of operation
+	// for symmetric key cryptographic block ciphers
+	gcm, err := cipher.NewGCM(c)
+	// if any error generating new GCM
+	// handle them
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	// creates a new byte array the size of the nonce
+	// which must be passed to Seal
+	nonce := make([]byte, gcm.NonceSize())
+	// populates our nonce with a cryptographically secure
+	// random sequence
+	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+		fmt.Println(err)
+	}
+
+	// here we encrypt our text using the Seal function
+	// Seal encrypts and authenticates plaintext, authenticates the
+	// additional data and appends the result to dst, returning the updated
+	// slice. The nonce must be NonceSize() bytes long and unique for all
+	// time, for a given key.
+	fmt.Println("Encrypted text:")
+
+	encryptedMessage := gcm.Seal(nonce, nonce, text, nil)
+	fmt.Println(encryptedMessage)
+
+	//send the encrypted message
+	p := make([]byte, 2048)
+
+	conn, err := net.Dial("udp", "127.0.0.1:1234")
+
+	if err != nil {
+		fmt.Printf("Some error %v", err)
+		return
+	}
+
+	conn.Write(encryptedMessage)
+	_, err = bufio.NewReader(conn).Read(p)
+	if err == nil {
+		fmt.Printf("%s\n", p)
+	} else {
+		fmt.Printf("Some error %v\n", err)
+	}
+	conn.Close()
+
+}
 func sendMessage() {
 	p := make([]byte, 2048)
 	conn, err := net.Dial("udp", "127.0.0.1:1234")
@@ -92,6 +157,8 @@ func menu(option int) {
 		sendMessage()
 	case 2:
 		sendInOrderMessages()
+	case 3:
+		sendEncryptedMessage()
 	default:
 		fmt.Println("Invalid option please choose again")
 	}
@@ -110,6 +177,7 @@ func main() {
 		fmt.Println("0) To quit the program")
 		fmt.Println("1) Send a message to the server")
 		fmt.Println("2) Send in ordered messages to the server")
+		fmt.Println("3) Send an encrypted message to the server")
 		fmt.Println("")
 		fmt.Println("Type the number of the option you would like to select")
 		fmt.Scanln(&option)

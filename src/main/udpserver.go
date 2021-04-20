@@ -25,7 +25,7 @@ func main() {
 	fmt.Println("")
 	fmt.Println("==============================================")
 
-	ser, err := net.ListenUDP("udp", &addr)
+	server, err := net.ListenUDP("udp", &addr)
 
 	if err != nil {
 		fmt.Printf("Some error %v\n", err)
@@ -33,12 +33,12 @@ func main() {
 	}
 
 	for {
-		_, remoteaddr, err := ser.ReadFromUDP(p)
+		_, remoteaddr, err := server.ReadFromUDP(p)
 		fmt.Printf("Read a message from %v %s \n", remoteaddr, p)
 		if err != nil {
 			fmt.Printf("Some error  %v", err)
 			continue
 		}
-		go sendResponse(ser, remoteaddr)
+		go sendResponse(server, remoteaddr)
 	}
 }
