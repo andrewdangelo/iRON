@@ -18,9 +18,10 @@ func sendResponse(conn *net.UDPConn, addr *net.UDPAddr) {
 
 func forwardMessage(destination string, message []byte) {
 
-	println("----------")
+	println("-------------------")
 	println("forwaring to:" + destination)
-	println("----------")
+	println(message)
+	println("-------------------")
 
 	conn, err := net.Dial("udp", destination)
 	if err != nil {
@@ -43,7 +44,6 @@ func unfoldPacket(packet []byte) (int, string, []byte) {
 		totalDestinations = (len(destinations) + 1) / IP_LENGTH
 	}
 
-	fmt.Println(numberOfDestinations)
 	if totalDestinations != 0 {
 		nextdestination := packet[1 : IP_LENGTH+1]
 		newPacket := packet[IP_LENGTH+1 : len(packet)]
@@ -56,10 +56,12 @@ func unfoldPacket(packet []byte) (int, string, []byte) {
 func processRequest(conn *net.UDPConn, packet []byte) {
 	hopsleft, nextdestination, newpacket := unfoldPacket(packet)
 
-	fmt.Println("hops left: ", hopsleft)
-	fmt.Println("destination: ", nextdestination)
 	if hopsleft != 0 {
+		fmt.Println("hops left: ", hopsleft)
+		fmt.Println("destination: ", nextdestination)
 		forwardMessage(nextdestination, newpacket)
+	} else {
+		fmt.Println("Hit destination!")
 	}
 }
 
