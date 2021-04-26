@@ -20,6 +20,8 @@ import (
 
 var clear map[string]func() //create a map for storing clear funcs
 
+var IP_LENGTH = 14
+
 func init() {
 	fmt.Println("init")
 	clear = make(map[string]func()) //Initialize it
@@ -240,10 +242,100 @@ func menu(option int) {
 		sendThroughTwoServers()
 	case 5:
 		ddos()
+	case 6:
+		test()
 	default:
 		fmt.Println("Invalid option please choose again")
 	}
 	fmt.Println("-----------------------")
+}
+
+func test() {
+
+	packet := buildPacket("hello world!")
+
+	fmt.Println("Packet payload:")
+	fmt.Println(packet)
+
+	packetwithdestination := addDestination(packet, "127.0.0.1:1234")
+
+	fmt.Println("Packet with destination:")
+	fmt.Println(packetwithdestination)
+
+	packet2withdestination := addDestination(packetwithdestination, "127.0.0.1:1235")
+
+	fmt.Println("Packet 2 with destination:")
+	fmt.Println(packet2withdestination)
+
+	packet3withdestination := addDestination(packet2withdestination, "127.0.0.1:1236")
+
+	fmt.Println("Packet 3 with destination:")
+	fmt.Println(packet3withdestination)
+
+	fmt.Println("Destinations:")
+
+	getDestinations(packet3withdestination)
+
+	sendPacket("127.0.0.1:1234", packet3withdestination)
+}
+
+func sendPacket(ip string, packet []byte) {
+	conn, err := net.Dial("udp", ip)
+	if err != nil {
+		fmt.Printf("Some error %v", err)
+		return
+	}
+
+	conn.Write(packet)
+
+	conn.Close()
+}
+
+func buildPacket(payload string) []byte {
+	//convert the message in bytes
+	byteMessage := []byte(payload)
+	//sets the first byte to 0 which means it has no destination after being sent once
+	packet := append([]byte{0}, byteMessage...)
+	return packet
+}
+
+//the ip is 4 bytes
+func addDestination(packet []byte, ip string) []byte {
+	numberOfDestinations := packet[0]
+	numberOfDestinations++ //update the value
+	ipBytes := []byte(ip)
+
+	packetpayload := packet[1:len(packet)]
+
+	fmt.Println("adding destination:")
+	fmt.Println(ipBytes)
+	packet[0] = numberOfDestinations
+	packetwithdestination := append(ipBytes, packetpayload...)
+	packetwithdestinationandcount := append([]byte{numberOfDestinations}, packetwithdestination...)
+	return packetwithdestinationandcount
+}
+
+func getDestinations(packet []byte) {
+	numberOfDestinations := packet[0]
+	destinations := packet[1 : numberOfDestinations*byte(IP_LENGTH)]
+	totalDestinations := (len(destinations) + 1) / IP_LENGTH
+
+	fmt.Println("Total destinations", totalDestinations)
+
+	for i := 0; i < totalDestinations; i++ {
+
+		lowerBound := i * IP_LENGTH
+		upperBound := i*IP_LENGTH + IP_LENGTH
+
+		bytes := destinations[lowerBound:upperBound]
+		str := string(bytes[:])
+		fmt.Print(str)
+
+		if i != totalDestinations-1 {
+			fmt.Print(" ---> ")
+		}
+	}
+	fmt.Print("\n")
 }
 
 func main() {
@@ -256,11 +348,12 @@ func main() {
 		fmt.Println("|      iRON Menu      |")
 		fmt.Println("-----------------------")
 		fmt.Println("0) To quit the program")
-		fmt.Println("1) Send a message to the server")
+		fmt.Println("1) a message to the server")
 		fmt.Println("2) Send in ordered messages to the server")
 		fmt.Println("3) Send an encrypted message to the server")
 		fmt.Println("4) Send a message through 2 servers")
 		fmt.Println("5) DDos a server at a specific port")
+		fmt.Println("6) Test")
 		fmt.Println("")
 		fmt.Println("Type the number of the option you would like to select")
 		fmt.Scanln(&option)

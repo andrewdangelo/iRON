@@ -16,10 +16,10 @@ func sendResponse(conn *net.UDPConn, addr *net.UDPAddr) {
 	}
 }
 
-func forwardMessage(destination string, message string) {
+func forwardMessage(destination string, message []byte) {
 
 	println("----------")
-	println("forwaring to:" + destination + "333")
+	println("forwaring to:" + destination)
 	println("----------")
 
 	conn, err := net.Dial("udp", destination)
@@ -28,12 +28,39 @@ func forwardMessage(destination string, message string) {
 		return
 	}
 
-	fmt.Println("attempting to forward a message to " + destination)
+	conn.Write(message)
+}
 
-	//convert the message in bytes
-	byteMessage := []byte(message)
-	conn.Write(byteMessage)
+func unfoldPacket(packet []byte) (int, string, []byte) {
+	var IP_LENGTH = 14
+	numberOfDestinations := packet[0]
+	numberOfDestinations = numberOfDestinations - 1
+	var destinations []byte
+	var totalDestinations int = 0
 
+	if numberOfDestinations != 0 {
+		destinations = packet[1 : numberOfDestinations*byte(IP_LENGTH)]
+		totalDestinations = (len(destinations) + 1) / IP_LENGTH
+	}
+
+	fmt.Println(numberOfDestinations)
+	if totalDestinations != 0 {
+		nextdestination := packet[1 : IP_LENGTH+1]
+		newPacket := packet[IP_LENGTH+1 : len(packet)]
+		packetwithcount := append([]byte{numberOfDestinations}, newPacket...)
+		return totalDestinations, string(nextdestination), packetwithcount
+	}
+	return 0, "", packet
+}
+
+func processRequest(conn *net.UDPConn, packet []byte) {
+	hopsleft, nextdestination, newpacket := unfoldPacket(packet)
+
+	fmt.Println("hops left: ", hopsleft)
+	fmt.Println("destination: ", nextdestination)
+	if hopsleft != 0 {
+		forwardMessage(nextdestination, newpacket)
+	}
 }
 
 func main() {
@@ -102,17 +129,7 @@ func main() {
 			continue
 		}
 
-		/*
-			stringPayload := string(p)
-
-			split := s.Split(stringPayload, "~")
-
-
-				if len(split) >= 2 {
-					go forwardMessage(split[0], split[1])
-				}
-		*/
-
+		go processRequest(server, p)
 		go sendResponse(server, remoteaddr)
 	}
 
