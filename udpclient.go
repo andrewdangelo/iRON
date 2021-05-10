@@ -13,9 +13,6 @@ import (
 	"runtime"
 	"strconv"
 	"time"
-
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
 )
 
 var clear map[string]func() //create a map for storing clear funcs
@@ -54,72 +51,56 @@ func CallClear() {
 }
 
 func encrypt(text []byte, key []byte) []byte {
-
-	// generate a new aes cipher using our 32 byte long key
 	c, err := aes.NewCipher(key)
-	// if there are any errors, handle them
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	// gcm or Galois/Counter Mode, is a mode of operation
-	// for symmetric key cryptographic block ciphers
 	gcm, err := cipher.NewGCM(c)
-	// if any error generating new GCM
-	// handle them
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	// creates a new byte array the size of the nonce
-	// which must be passed to Seal
 	nonce := make([]byte, gcm.NonceSize())
-	// populates our nonce with a cryptographically secure
-	// random sequence
 	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
 		fmt.Println(err)
 	}
-
-	// here we encrypt our text using the Seal function
-	// Seal encrypts and authenticates plaintext, authenticates the
-	// additional data and appends the result to dst, returning the updated
-	// slice. The nonce must be NonceSize() bytes long and unique for all
-	// time, for a given key.
-
 	encryptedMessage := gcm.Seal(nonce, nonce, text, nil)
-
 	return encryptedMessage
-
 }
 
-func sendEncryptedMessage() {
-	text := []byte("This message is encrypted")
+func decrypt(ciphertext []byte, key []byte) []byte {
+	c, err := aes.NewCipher(key)
+	if err != nil {
+		fmt.Println(err)
+	}
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		fmt.Println(err)
+	}
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext) < nonceSize {
+		fmt.Println(err)
+	}
+	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	return plaintext
+}
+
+func encryptionTest() {
+	text := []byte("This message is encrypted!!! hiiii!!! Yayyyy!!")
 	key := []byte("passphrasewhichneedstobe32bytes!") //needs to be 32 bytes
+	fmt.Println("Before Encryption:")
+	fmt.Println(string(text))
 	fmt.Println(text)
 	encryptedMessage := encrypt(text, key)
+	fmt.Println("After Encryption:")
+	fmt.Println(string(encryptedMessage))
 	fmt.Println(encryptedMessage)
-
-	//send the encrypted message
-	p := make([]byte, 2048)
-
-	conn, err := net.Dial("udp", "127.0.0.1:1234")
-
-	if err != nil {
-		fmt.Printf("Some error %v", err)
-		return
-	}
-
-	conn.Write(encryptedMessage)
-
-	_, err = bufio.NewReader(conn).Read(p)
-	if err == nil {
-		fmt.Printf("%s\n", p)
-	} else {
-		fmt.Printf("Some error %v\n", err)
-	}
-	conn.Close()
-
+	fmt.Println("After decryption:")
+	decryptedMessage := decrypt(encryptedMessage, key)
+	fmt.Println(string(decryptedMessage))
+	fmt.Println(decryptedMessage)
 }
+
 func sendMessage() {
 	p := make([]byte, 2048)
 	conn, err := net.Dial("udp", "127.0.0.1:1234")
@@ -157,32 +138,6 @@ func sendInOrderMessages() {
 	} else {
 		fmt.Printf("Some error %v\n", err)
 	}
-	conn.Close()
-}
-
-func sendThroughTwoServers() {
-	//the message to send
-	messageToSend := "127.0.0.1:1235~Hello this message is going through 2 servers"
-
-	//convert the message in bytes
-	byteMessage := []byte(messageToSend)
-
-	fmt.Println("Btye Message: ", byteMessage)
-
-	//put the message in a packet
-	packet := gopacket.NewPacket(byteMessage, layers.LayerTypeUDP, gopacket.Default)
-
-	fmt.Println(packet.String())
-
-	//call up the udp server
-	conn, err := net.Dial("udp", "127.0.0.1:1234")
-
-	conn.Write(packet.Data())
-	if err != nil {
-		fmt.Printf("Some error %v", err)
-		return
-	}
-
 	conn.Close()
 }
 
@@ -227,6 +182,23 @@ func generatePacketPayload(byteSize int) []byte {
 	return token
 }
 
+func encryptPacket(packet []byte, key []byte) []byte {
+	numberOfHops := packet[0]
+	payload := packet[1:len(packet)]
+	encryptPayload := encrypt(payload, key)
+	newPacket := append([]byte{numberOfHops}, encryptPayload...)
+	return newPacket
+}
+
+func decryptPacket(packet []byte, key []byte) []byte {
+	fmt.Println("decrypting packet")
+	numberOfHops := packet[0]
+	payload := packet[1:len(packet)]
+	decryptedPayload := decrypt(payload, key)
+	newPacket := append([]byte{numberOfHops}, decryptedPayload...)
+	return newPacket
+}
+
 func menu(option int) {
 	fmt.Println("-----------------------")
 	fmt.Println("|        Output        |")
@@ -237,46 +209,55 @@ func menu(option int) {
 	case 2:
 		sendInOrderMessages()
 	case 3:
-		sendEncryptedMessage()
+		encryptionTest()
 	case 4:
-		sendThroughTwoServers()
-	case 5:
 		ddos()
+	case 5:
+		sendThrough3Servers()
 	case 6:
-		test()
+		sendthroughmany()
+	case 7:
+		sendThrough3AnonServers()
 	default:
 		fmt.Println("Invalid option please choose again")
 	}
 	fmt.Println("-----------------------")
 }
 
-func test() {
-
-	packet := buildPacket("hello world!")
-
-	fmt.Println("Packet payload:")
-	fmt.Println(packet)
-
+func sendThrough3Servers() {
+	packet := buildPacketFromString("hello world!")
 	packetwithdestination := addDestination(packet, "127.0.0.1:1234")
-
-	fmt.Println("Packet with destination:")
-	fmt.Println(packetwithdestination)
-
 	packet2withdestination := addDestination(packetwithdestination, "127.0.0.1:1235")
-
-	fmt.Println("Packet 2 with destination:")
-	fmt.Println(packet2withdestination)
-
 	packet3withdestination := addDestination(packet2withdestination, "127.0.0.1:1236")
-
-	fmt.Println("Packet 3 with destination:")
-	fmt.Println(packet3withdestination)
-
-	fmt.Println("Destinations:")
-
-	getDestinations(packet3withdestination)
-
 	sendPacket("127.0.0.1:1234", packet3withdestination)
+}
+
+func sendThrough3AnonServers() {
+	key := []byte("passphrasewhichneedstobe32bytes!") //needs to be 32 bytes
+	packet := buildPacketFromString("hello world!")
+	packetwithdestination := addDestination(packet, "127.0.0.1:1234")
+	packetwithdestinationencrypted := encryptPacket(packetwithdestination, key)
+
+	packet2withdestination := addDestination(packetwithdestinationencrypted, "127.0.0.1:1235")
+	packet2withdestinationencrypted := encryptPacket(packet2withdestination, key)
+
+	packet3withdestination := addDestination(packet2withdestinationencrypted, "127.0.0.1:1236")
+	packet3ithdestinationencrypted := encryptPacket(packet3withdestination, key)
+
+	sendPacket("127.0.0.1:1234", packet3ithdestinationencrypted)
+}
+
+func sendthroughmany() {
+
+	for i := 0; i < 100; i++ {
+		message := generatePacketPayload(1000)
+		packet := buildPacketFromBytes(message)
+		packetwithdestination := addDestination(packet, "127.0.0.1:1234")
+		packet2withdestination := addDestination(packetwithdestination, "127.0.0.1:1235")
+		packet3withdestination := addDestination(packet2withdestination, "127.0.0.1:1236")
+		getDestinations(packet3withdestination)
+		sendPacket("127.0.0.1:1234", packet3withdestination)
+	}
 }
 
 func sendPacket(ip string, packet []byte) {
@@ -285,17 +266,21 @@ func sendPacket(ip string, packet []byte) {
 		fmt.Printf("Some error %v", err)
 		return
 	}
-
 	conn.Write(packet)
-
 	conn.Close()
 }
 
-func buildPacket(payload string) []byte {
+func buildPacketFromString(payload string) []byte {
 	//convert the message in bytes
 	byteMessage := []byte(payload)
 	//sets the first byte to 0 which means it has no destination after being sent once
 	packet := append([]byte{0}, byteMessage...)
+	return packet
+}
+
+func buildPacketFromBytes(payload []byte) []byte {
+	//sets the first byte to 0 which means it has no destination after being sent once
+	packet := append([]byte{0}, payload...)
 	return packet
 }
 
@@ -350,10 +335,11 @@ func main() {
 		fmt.Println("0) To quit the program")
 		fmt.Println("1) a message to the server")
 		fmt.Println("2) Send in ordered messages to the server")
-		fmt.Println("3) Send an encrypted message to the server")
-		fmt.Println("4) Send a message through 2 servers")
-		fmt.Println("5) DDos a server at a specific port")
-		fmt.Println("6) Test")
+		fmt.Println("3) Test AES encryption")
+		fmt.Println("4) DDos a server at a specific port")
+		fmt.Println("5) Send Message through 3 servers")
+		fmt.Println("6) Send many messages through 3 servers")
+		fmt.Println("7) Send message through 3 anonymous servers")
 		fmt.Println("")
 		fmt.Println("Type the number of the option you would like to select")
 		fmt.Scanln(&option)

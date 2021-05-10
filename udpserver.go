@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"fmt"
 	"net"
 	"os"
@@ -53,6 +55,47 @@ func unfoldPacket(packet []byte) (int, string, []byte) {
 	return 0, "", packet
 }
 
+func decrypt(ciphertext []byte, key []byte) []byte {
+	length := Find(ciphertext, 0)
+	trimmed := ciphertext[0:length]
+
+	c, err := aes.NewCipher(key)
+	if err != nil {
+		fmt.Println(err)
+	}
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		fmt.Println(err)
+	}
+	nonceSize := gcm.NonceSize()
+	if len(trimmed) < nonceSize {
+		fmt.Println(err)
+	}
+	nonce, trimmed := ciphertext[:nonceSize], trimmed[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, trimmed, nil)
+
+	return plaintext
+}
+
+func Find(arr []byte, key byte) int {
+	for i, n := range arr {
+		if key == n {
+			return i
+		}
+	}
+	return -1
+}
+
+func decryptPacket(packet []byte, key []byte) []byte {
+	fmt.Println("decrypting packet")
+	numberOfHops := packet[0]
+	payload := packet[1:len(packet)]
+	decryptedPayload := decrypt(payload, key)
+
+	newPacket := append([]byte{numberOfHops}, decryptedPayload...)
+	return newPacket
+}
+
 func processRequest(conn *net.UDPConn, packet []byte) {
 	hopsleft, nextdestination, newpacket := unfoldPacket(packet)
 
@@ -65,11 +108,40 @@ func processRequest(conn *net.UDPConn, packet []byte) {
 	}
 }
 
+//tor network like node
+func processAnonymousRequest(conn *net.UDPConn, encryptedPacket []byte) {
+
+	fmt.Println("processing anonymous request")
+	key := []byte("passphrasewhichneedstobe32bytes!") //needs to be 32 bytes
+	decryptedpacket := decryptPacket(encryptedPacket, key)
+
+	fmt.Println("decrypted packet")
+	fmt.Println(decryptedpacket)
+
+	hopsleft, nextdestination, newpacket := unfoldPacket(decryptedpacket)
+
+	fmt.Println("hops left: ", hopsleft)
+	fmt.Println("Next destination: ", nextdestination)
+	fmt.Println("New packet", newpacket)
+
+	fmt.Println("Decrypted packet")
+	fmt.Println(decryptedpacket)
+
+	if hopsleft != 0 {
+		fmt.Println("hops left: ", hopsleft)
+		fmt.Println("destination: ", nextdestination)
+		//forwardMessage(nextdestination, newpacket)
+	} else {
+		fmt.Println("Hit destination!")
+	}
+}
+
 func main() {
 	p := make([]byte, 2048) //creates a "slice"
 
 	var PORT int = 1234
 	enable_logging := false
+	anonymous := false
 
 	fmt.Printf("Port Number: ")
 	fmt.Scanln(&PORT)
@@ -83,6 +155,13 @@ func main() {
 		}
 	}
 
+	fmt.Printf("Enable Anon Node (yes or no): ")
+	option := ""
+	fmt.Scanln(&option)
+	if option == "yes" {
+		anonymous = true
+	}
+
 	addr := net.UDPAddr{
 		Port: PORT,
 		IP:   net.ParseIP("127.0.0.1"),
@@ -92,7 +171,7 @@ func main() {
 	fmt.Println("")
 	fmt.Println(" Started udpserver at ", addr.IP, ":", addr.Port)
 	fmt.Println(" Logging enabled:", enable_logging)
-	fmt.Println("")
+	fmt.Println(" Anonymous Node: ", anonymous)
 	fmt.Println("==============================================")
 
 	server, err := net.ListenUDP("udp", &addr)
@@ -131,7 +210,13 @@ func main() {
 			continue
 		}
 
-		go processRequest(server, p)
+		if anonymous {
+			go processAnonymousRequest(server, p)
+		} else {
+			go processRequest(server, p)
+		}
+
+		//every request gets a response back
 		go sendResponse(server, remoteaddr)
 	}
 

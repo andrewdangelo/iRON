@@ -16,3 +16,9 @@ MAKE function
     -go starts a goroutine, which is managed by golang run-time.
     -It can either run on the current OS thread, or it can run on a different OS thread automatically.
         
+
+NETWORK CONDITIONS:
+    Latency - The time it takes to transmit data
+    Packet Loss - the number of packets transmitted from one destination to another that fail to transmit
+    Throughput and Bandwidth - Bandwidth, usually measured in bits per second, is a characterization of the amount of data that can be transferred over a given time period
+    Jitter - This variable represents an identified disruption in the normal sequencing of data packets.
